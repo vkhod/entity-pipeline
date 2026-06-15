@@ -119,8 +119,9 @@ Get-Content .env | Where-Object { $_ -match '^[A-Z_]+=.' -and $_ -notmatch '^#' 
 go test ./internal/llm/ -run TestClaudeClassifier -v
 ```
 
-The test skips automatically if `ANTHROPIC_API_KEY` is not set, so `go test ./...`
-always stays green with no key.
+The Claude test skips automatically if `ANTHROPIC_API_KEY` is not set, so missing
+Claude credentials do not break `go test ./...` (the integration package still
+requires Docker for testcontainers).
 
 > **No key?** Everything works without one. Leave `CLASSIFIER=mock` in `.env` (or
 > omit the variable entirely) and the pipeline runs end-to-end using the built-in
