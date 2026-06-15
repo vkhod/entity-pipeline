@@ -1,0 +1,14 @@
+# Binaries
+/api
+/worker
+*.exe
+
+# Env / secrets
+.env
+
+# Go
+/vendor/
+go.sum.bak
+
+# Local notes (not part of the submission)
+REVIEW_NOTES.md

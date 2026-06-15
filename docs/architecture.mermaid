@@ -1,0 +1,23 @@
+flowchart TB
+    Client(["Client"])
+    API["API · stateless · :8080<br/>POST /process · GET /status · GET /tokens"]
+    PG[("PostgreSQL<br/>single source of truth + work queue<br/>tables: documents, tokens")]
+
+    subgraph EXTSTAGE["Extraction stage: scale out independently (N replicas)"]
+        EXT["Extraction worker(s)<br/>NLP extract → write tokens (atomic)"]
+        NLP["NLP provider<br/>Extractor interface · mock or real"]
+    end
+
+    subgraph CLSSTAGE["Classification stage: scale out independently (M replicas)"]
+        CLS["Classification worker(s)<br/>LLM classify → update + bump counter"]
+        LLM["LLM provider<br/>Classifier interface · mock or real"]
+    end
+
+    Client -->|HTTP| API
+    API -->|"write / reset manifest · read status and tokens"| PG
+    EXT -->|"① claim pending — FOR UPDATE SKIP LOCKED"| PG
+    EXT -->|"② write tokens + set classifying (1 txn)"| PG
+    EXT -->|"Extract(doc)"| NLP
+    CLS -->|"③ claim extracted — SKIP LOCKED, batched"| PG
+    CLS -->|"④ update tokens + bump counter (1 txn)"| PG
+    CLS -->|"Classify(token)"| LLM
