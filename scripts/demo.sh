@@ -27,7 +27,9 @@ for d in small medium large; do curl -s "$BASE/documents/doc-$d/status" | jq '{d
 
 echo "== 6. Partial rerun (crash recovery) — manual steps =="
 cat <<'NOTE'
-  1. POST the large document and let classification begin.
+  1. POST the large document and let classification begin:
+        curl -s -X POST http://localhost:8080/process -H 'Content-Type: application/json' \
+          -d "{\"document_id\":\"doc-crash\",\"text\":\"$(tr '\n' ' ' < testdata/large.txt | sed 's/"/\\"/g')\"}" | jq .
   2. While status is 'classifying', stop a classification worker:
         docker compose stop classification-worker
   3. The status endpoint shows progress frozen mid-way (e.g. 40/120).

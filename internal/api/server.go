@@ -4,7 +4,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -71,17 +73,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	q := r.URL.Query()
-	f := store.TokenFilter{
-		Classification: q.Get("classification"),
-		Status:         q.Get("status"),
-		Limit:          atoiDefault(q.Get("limit"), 100),
-		Offset:         atoiDefault(q.Get("offset"), 0),
-	}
-	if p := q.Get("page"); p != "" {
-		if n, err := strconv.Atoi(p); err == nil {
-			f.Page = &n
-		}
+	f, err := parseTokenFilter(r.URL.Query())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	tokens, err := s.store.ListTokens(r.Context(), id, f)
 	if err != nil {
@@ -89,6 +84,54 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"document_id": id, "count": len(tokens), "tokens": tokens})
+}
+
+func parseTokenFilter(q url.Values) (store.TokenFilter, error) {
+	limit, err := parseIntParam(q, "limit", 100)
+	if err != nil {
+		return store.TokenFilter{}, err
+	}
+	if limit < 1 || limit > 1000 {
+		return store.TokenFilter{}, fmt.Errorf("limit must be between 1 and 1000")
+	}
+
+	offset, err := parseIntParam(q, "offset", 0)
+	if err != nil {
+		return store.TokenFilter{}, err
+	}
+	if offset < 0 {
+		return store.TokenFilter{}, fmt.Errorf("offset must be >= 0")
+	}
+
+	f := store.TokenFilter{
+		Classification: q.Get("classification"),
+		Status:         q.Get("status"),
+		Limit:          limit,
+		Offset:         offset,
+	}
+	if p := q.Get("page"); p != "" {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return store.TokenFilter{}, fmt.Errorf("page must be an integer")
+		}
+		if n < 1 {
+			return store.TokenFilter{}, fmt.Errorf("page must be >= 1")
+		}
+		f.Page = &n
+	}
+	return f, nil
+}
+
+func parseIntParam(q url.Values, name string, def int) (int, error) {
+	v := q.Get(name)
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer", name)
+	}
+	return n, nil
 }
 
 // handleLiveness is the Kubernetes liveness probe. It returns 200 as long as the process
@@ -153,14 +196,4 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeError(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
-}
-
-func atoiDefault(s string, def int) int {
-	if s == "" {
-		return def
-	}
-	if n, err := strconv.Atoi(s); err == nil {
-		return n
-	}
-	return def
 }

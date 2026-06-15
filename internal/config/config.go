@@ -2,6 +2,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -31,6 +33,28 @@ func Load() Config {
 		AnthropicModel:  env("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
 		DemoDelay:       envDur("CLASSIFY_DEMO_DELAY", 50*time.Millisecond),
 	}
+}
+
+func (c Config) Validate() error {
+	if c.DatabaseURL == "" {
+		return errors.New("DATABASE_URL is required")
+	}
+	if c.HTTPAddr == "" {
+		return errors.New("HTTP_ADDR is required")
+	}
+	if c.ClassifyBatch < 1 {
+		return fmt.Errorf("CLASSIFY_BATCH_SIZE must be >= 1, got %d", c.ClassifyBatch)
+	}
+	if c.PollInterval <= 0 {
+		return fmt.Errorf("POLL_INTERVAL must be > 0, got %s", c.PollInterval)
+	}
+	if c.Backoff <= 0 {
+		return fmt.Errorf("RETRY_BACKOFF must be > 0, got %s", c.Backoff)
+	}
+	if c.DemoDelay < 0 {
+		return fmt.Errorf("CLASSIFY_DEMO_DELAY must be >= 0, got %s", c.DemoDelay)
+	}
+	return nil
 }
 
 func env(k, def string) string {

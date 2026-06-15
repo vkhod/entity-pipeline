@@ -5,6 +5,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -73,6 +74,9 @@ func (w *Worker) RunClassification(ctx context.Context) {
 				results, err := w.classifier.Classify(ctx, ents)
 				if err != nil {
 					return nil, err
+				}
+				if len(results) != len(tokens) {
+					return nil, fmt.Errorf("classifier returned %d results for %d tokens", len(results), len(tokens))
 				}
 				out := make([]queue.ClassifiedToken, len(tokens))
 				for i := range tokens {
