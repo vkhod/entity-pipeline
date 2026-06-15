@@ -2,6 +2,7 @@ package nlp
 
 import (
 	"context"
+	"os"
 	"testing"
 )
 
@@ -78,5 +79,21 @@ func TestMockExtractor_Extract_EmptyText(t *testing.T) {
 	}
 	if len(entities) != 0 {
 		t.Errorf("expected 0 entities for empty text, got %d", len(entities))
+	}
+}
+
+func TestMockExtractor_Extract_LargeFile_AtLeast100Entities(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/large.txt")
+	if err != nil {
+		t.Fatalf("read large.txt: %v", err)
+	}
+	m := NewMockExtractor()
+	entities, err := m.Extract(context.Background(), string(data))
+	if err != nil {
+		t.Fatalf("Extract returned error: %v", err)
+	}
+	const minEntities = 100
+	if len(entities) < minEntities {
+		t.Errorf("large.txt: got %d entities, want >= %d", len(entities), minEntities)
 	}
 }

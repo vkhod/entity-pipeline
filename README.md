@@ -69,6 +69,63 @@ docker compose up --build --scale classification-worker=5
 | `ANTHROPIC_API_KEY` | — | required when `CLASSIFIER=claude` |
 | `ANTHROPIC_MODEL` | `claude-haiku-4-5-20251001` | model for the real classifier |
 
+## Using the real Claude classifier
+
+The `.env` file at the project root is the single place for all runtime configuration.
+It is loaded automatically by Docker Compose and is already gitignored so the key
+stays local.
+
+### Step 1 — set the key in `.env`
+
+Open `.env` and fill in your Anthropic API key:
+
+```
+CLASSIFIER=claude
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-haiku-4-5-20251001
+```
+
+The key is only needed at **runtime** (not at build time), so this step can happen
+any time before you start the containers.
+
+### Step 2 — start the stack
+
+```bash
+./start.sh        # equivalent: docker compose up --build
+```
+
+Docker Compose reads `.env` automatically and passes `CLASSIFIER`, `ANTHROPIC_API_KEY`,
+and `ANTHROPIC_MODEL` to the `classification-worker` container. The extraction worker
+and API server are unaffected.
+
+### Step 3 — run the Claude integration test (optional)
+
+`go test` does not load `.env` automatically — variables must already be in the shell
+environment. Source them first, then run the test:
+
+**macOS / Linux (bash/zsh):**
+```bash
+set -a
+source .env
+set +a
+go test ./internal/llm/ -run TestClaudeClassifier -v
+```
+
+**Windows PowerShell:**
+```powershell
+Get-Content .env | Where-Object { $_ -match '^[A-Z_]+=.' -and $_ -notmatch '^#' } |
+    ForEach-Object { $_ -replace '\s+#.*$', '' } |
+    ForEach-Object { $n, $v = $_ -split '=', 2; Set-Item "env:$n" $v }
+go test ./internal/llm/ -run TestClaudeClassifier -v
+```
+
+The test skips automatically if `ANTHROPIC_API_KEY` is not set, so `go test ./...`
+always stays green with no key.
+
+> **No key?** Everything works without one. Leave `CLASSIFIER=mock` in `.env` (or
+> omit the variable entirely) and the pipeline runs end-to-end using the built-in
+> deterministic classifier with no external calls.
+
 ## Test documents
 
 - `testdata/small.txt` — ~8 entities
@@ -101,7 +158,7 @@ cmd/worker         worker entrypoint (--stage=extraction|classification)
 internal/model     domain types
 internal/config    env configuration
 internal/nlp       Extractor interface + rule-based mock
-internal/llm       Classifier interface + mock + Claude skeleton + factory
+internal/llm       Classifier interface + mock + Claude (real) + factory
 internal/queue     WorkQueue port (the broker-swap seam)
 internal/store     Postgres implementation (queue + API methods)
 internal/worker    stage loop
@@ -114,5 +171,7 @@ docs               architecture diagram
 ## Status
 
 The default `CLASSIFIER=mock` runs the whole pipeline with no external dependencies.
-The `claude` classifier (Anthropic Messages API) is wired as a drop-in selectable via
-`CLASSIFIER=claude` — see `internal/llm/claude.go`.
+`CLASSIFIER=claude` switches to the real Anthropic Messages API classifier — one
+request per batch, with retry/backoff and length-safe result handling
+(`internal/llm/claude.go`). The interface, worker, and store are unchanged between
+the two modes.

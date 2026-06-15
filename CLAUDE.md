@@ -52,5 +52,5 @@ See `README.md` §Configuration. Key: `CLASSIFIER` (mock|claude), `CLASSIFY_BATC
 
 ## What is mocked vs real
 - NLP extractor: regex rule-based mock (`internal/nlp/mock.go`) — same `Extractor` interface; real NER is a drop-in.
-- Classifier: `CLASSIFIER=mock` (deterministic, no network) or `CLASSIFIER=claude` (Anthropic Messages API, skeleton wired in `internal/llm/claude.go`).
+- Classifier: `CLASSIFIER=mock` (deterministic, no network) or `CLASSIFIER=claude` (real Anthropic Messages API client in `internal/llm/claude.go`).
 - Integration tests: real Postgres via testcontainers-go (postgres:16 module); no mocks at the DB layer.

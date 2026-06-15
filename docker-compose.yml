@@ -48,11 +48,11 @@ services:
     command: ["/app/worker", "--stage=classification"]
     environment:
       DATABASE_URL: postgres://pipeline:pipeline@postgres:5432/pipeline?sslmode=disable
-      CLASSIFIER: mock                # mock | claude
-      CLASSIFY_BATCH_SIZE: "10"
-      CLASSIFY_DEMO_DELAY: "50ms"     # per-token mock delay so progress is visible (demo only)
-      # ANTHROPIC_API_KEY: "..."      # set when CLASSIFIER=claude
-      # ANTHROPIC_MODEL: "claude-haiku-4-5-20251001"
+      CLASSIFIER: ${CLASSIFIER:-mock}
+      CLASSIFY_BATCH_SIZE: ${CLASSIFY_BATCH_SIZE:-10}
+      CLASSIFY_DEMO_DELAY: ${CLASSIFY_DEMO_DELAY:-50ms}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
     depends_on:
       postgres:
         condition: service_healthy

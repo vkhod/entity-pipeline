@@ -83,15 +83,49 @@ Classify these tokens:
 
 ## 2. Development prompts
 
-The architecture was developed through iterative design conversation before any code was
-written — each decision (Postgres-as-queue vs. a broker, atomic extraction vs. incremental
-classification, the reject-if-in-flight rerun policy, the failure-recovery model) was reasoned
-through with trade-offs named, then captured in `ARCHITECTURE.md`. Implementation followed the
-locked design.
+The design was not produced by a single prompt — it was worked out through dialogue. Each major
+decision (Postgres-as-queue vs. a message broker, atomic extraction vs. incremental
+classification, the reject-if-in-flight rerun policy, and where crash recovery actually comes
+from) was argued with its trade-offs both ways before a choice was made and captured in
+`ARCHITECTURE.md`. AI was used as a collaborator with human judgment as the integrator —
+proposals were interrogated and corrected, not accepted wholesale. Implementation then followed
+the locked design.
 
-<!--
-TODO: curate the handful of prompts that best show the design reasoning and the build process —
-e.g. the prompt that worked through the queue-vs-broker trade-off, the one that settled the
-extraction/classification asymmetry, and the prompts used to scaffold and wire the store layer.
-Keep them tight and representative rather than a full transcript.
--->
+### Toolchain
+
+- **Claude (chat)** — design dialogue, the initial scaffold, and the runtime classification
+  prompt in §1.
+- **Claude Code** — implementation against the agreed design (store wiring, HTTP handlers, the
+  classifier), with `go build` / `go vet` / `go test` run in the loop.
+- **Codex** — an independent review pass. It surfaced two medium issues that were then fixed: a
+  classification worker that could panic on a short result slice before the store's length check,
+  and unvalidated `limit` / `offset` and batch-size inputs that could turn a client error into a
+  503 or stall the worker. Using a second, independent model to review the first's output was a
+  deliberate verify-don't-trust step.
+
+### Representative implementation prompt
+
+Implementation was delegated to Claude Code as contract-first prompts: an explicit task, the
+constraints that must hold, and a verification step — with the reasoning embedded so the agent
+made the right call rather than guessing. Example (adding the health probes):
+
+> Add Kubernetes-style liveness and readiness endpoints to the API.
+> - `GET /healthz` → liveness: 200 if the process is serving. Must **not** check the DB — if it
+>   did, a transient Postgres blip would fail every pod's liveness and make Kubernetes restart
+>   the whole fleet, turning a short outage into a cascading one.
+> - `GET /readyz` → readiness: pings Postgres (2s timeout); 503 if unreachable.
+> - Constraints: routes + docs only; no K8s manifests; stdlib `net/http`; match existing style;
+>   run `go build ./...` and `go vet ./...` when done.
+
+The store-wiring and Claude-classifier prompts followed the same shape — contract, constraints,
+and a build/test step the agent had to satisfy before finishing.
+
+### Decisions argued in dialogue
+
+The questions that drove the design, each resolved with trade-offs named in `ARCHITECTURE.md`:
+
+- Postgres as the work queue vs. a message broker — single source of truth vs. transport throughput.
+- Atomic extraction vs. incremental, batched classification.
+- Reject-if-in-flight vs. always-accept-and-abort on document re-submission.
+- Where crash recovery comes from — the transaction boundary, not a separate reconciler.
+
